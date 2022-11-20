@@ -17,6 +17,22 @@ contract Escrow {
     address public inspector;
     address public lender;
 
+    modifier onlyBuyer() {
+        require(msg.sender == buyer, "Only buyer can call this function");
+        _;
+    }
+
+    modifier onlyInspector() {
+        require(msg.sender == inspector, "Only inspector can call this function");
+        _;
+    }
+
+    receive() external payable {}
+
+    bool public inspectionPassed = false;
+
+    mapping(address => bool) public approval;
+
     constructor(
         address _nftAddress,
         uint256 _nftID,
@@ -37,16 +53,35 @@ contract Escrow {
         lender = _lender;
     }
 
-    function depositEarnest() public payable {
-        
+    //bool public inspectionPassed = false;
+
+    function depositEarnest() public payable onlyBuyer {
+        require(msg.value >= escrowAmount);
+    }
+
+    function updateInspectionStatus(bool _passed) public onlyInspector{
+        inspectionPassed = _passed;
+    }
+
+    function approveSale() public {
+        approval[msg.sender] = true;
     }
 
     function getBalance() public view returns (uint) {
         return address(this).balance;
     }
 
-    // Transfer ownership of property
     function finalizeSale() public {
+        require(inspectionPassed, "Must pass inspection");
+        require(approval[buyer], "Buyer need to approve");
+        require(approval[seller], "Seller needs to approve");
+        require(approval[lender], "Lender needs to approve");
+        require(address(this).balance >= purchasePrice, "Must have enougth ETH for sale");
+        
+        // transfer funds to the seller
+        (bool success, ) = payable(seller).call{value: address(this).balance}("");
+        require(success);
+        
         // transfer ownership of property
         IERC721(nftAddress).transferFrom(seller, buyer, nftID);
     }

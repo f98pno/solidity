@@ -12,7 +12,7 @@ describe('RealEstate', () => {
   let deployer, seller
   let nftID = 1
   let purchasePrice = ether(100)
-  let escrowAmount = ether(100)
+  let escrowAmount = ether(20)
 
   beforeEach(async () => {
     // Setup accounts
@@ -59,12 +59,40 @@ describe('RealEstate', () => {
       // Expects seller to be NFT owner before the sale
       expect(await realEstate.ownerOf(nftID)).to.equal(seller.address)
 
+      // Check escrow balance
+      balance = await escrow.getBalance()
+      console.log("escrow balance:", ethers.utils.formatEther(balance))
+
       // Buyer deposit earnest
       transaction = await escrow.connect(buyer).depositEarnest({value: escrowAmount})
+      console.log("Buyer deposits earnest money")
 
       // Check escrow balance
       balance = await escrow.getBalance()
       console.log("escrow balance:", ethers.utils.formatEther(balance))
+
+      // Inspector updates status
+      transaction = await escrow.connect(inspector).updateInspectionStatus(true)
+      await transaction.wait()
+      console.log("Inspector updates status")
+
+      // Buyer Approves sale
+      transaction = await escrow.connect(buyer).approveSale()
+      await transaction.wait()
+      console.log("Buyer approves sale")
+
+      // Seller Approves sale
+      transaction = await escrow.connect(seller).approveSale()
+      await transaction.wait()
+      console.log("Seller approves sale")
+
+      // Lender funds sale
+      transaction = await lender.sendTransaction({to: escrow.address, value: ether(80)})
+
+      // Lender Approves sale
+      transaction = await escrow.connect(lender).approveSale()
+      await transaction.wait()
+      console.log("Lender approves sale")
 
       // Finalize sale
       transaction = await escrow.connect(buyer).finalizeSale()
@@ -74,7 +102,11 @@ describe('RealEstate', () => {
       // Expects buyer to be NFT owner after the sale
       expect(await realEstate.ownerOf(nftID)).to.equal(buyer.address)
 
-    })
+      // Expect Seller to recieve Funds
+      balance = await ethers.provider.getBalance(seller.address)
+      console.log("Seller balance:", ethers.utils.formatEther(balance))
 
+      expect(balance).to.be.above(ether(10099))
+    })
   })
 })
